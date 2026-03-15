@@ -1,18 +1,27 @@
 use anyhow::Context;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::fmt;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 /// Cached OAuth2 token state persisted to disk between runs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CachedTokenState {
     pub access_token: String,
     pub refresh_token: Option<String>,
     /// Unix timestamp (seconds) when the access token expires.
     pub expires_at: i64,
+}
+
+impl fmt::Debug for CachedTokenState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CachedTokenState")
+            .field("access_token", &"***")
+            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "***"))
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
 }
 
 impl CachedTokenState {
@@ -48,11 +57,11 @@ impl TokenCache {
 
         // Scope cache file to (tenant_id, client_id, auth_flow) so config
         // changes never reuse tokens from a different account/flow.
-        let mut hasher = DefaultHasher::new();
-        config.tenant_id.hash(&mut hasher);
-        config.client_id.hash(&mut hasher);
-        config.auth_flow.hash(&mut hasher);
-        let fingerprint = format!("{:016x}", hasher.finish());
+        // Use a deterministic fingerprint (not DefaultHasher which is unstable
+        // across Rust versions and would orphan cache files on toolchain updates).
+        let fingerprint = format!(
+            "{}_{}_{}", config.tenant_id, config.client_id, config.auth_flow
+        ).replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
 
         let cache_path = zeroclaw_dir.join(format!("ms365_token_cache_{fingerprint}.json"));
         let cached = Self::load_from_disk(&cache_path);
@@ -320,9 +329,31 @@ impl TokenCache {
 
     fn persist_to_disk(&self, state: &CachedTokenState) {
         if let Ok(json) = serde_json::to_string_pretty(state) {
-            if let Err(e) = std::fs::write(&self.cache_path, json) {
+            if let Err(e) = Self::write_restricted(&self.cache_path, &json) {
                 tracing::warn!("ms365: failed to persist token cache: {e}");
             }
+        }
+    }
+
+    /// Write file with restricted permissions (0o600 on Unix) to prevent
+    /// other local users from reading cached OAuth tokens.
+    fn write_restricted(path: &std::path::Path, content: &str) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)?;
+            file.write_all(content.as_bytes())?;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(path, content)
         }
     }
 }

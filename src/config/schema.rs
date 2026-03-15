@@ -5322,6 +5322,20 @@ impl Config {
                     "microsoft365.tenant_id must not be empty when microsoft365 is enabled"
                 );
             }
+            // Validate tenant_id format to prevent URL injection in OAuth
+            // endpoints. Azure AD tenant IDs are either UUIDs or verified
+            // domain names (alphanumeric, hyphens, dots).
+            if let Some(tid) = tenant {
+                if !tid
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '-' || c == '.')
+                {
+                    anyhow::bail!(
+                        "microsoft365.tenant_id contains invalid characters; \
+                         expected UUID or domain format (alphanumeric, hyphens, dots)"
+                    );
+                }
+            }
             let client = self
                 .microsoft365
                 .client_id

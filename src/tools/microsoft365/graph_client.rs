@@ -285,7 +285,13 @@ pub async fn onedrive_list(
     let base = user_path(user_id);
     let url = match path {
         Some(p) if !p.is_empty() => {
-            let encoded = urlencoding::encode(p);
+            // Encode each path component individually, preserving '/' separators.
+            // Graph API expects literal '/' in the root:/{path}: syntax.
+            let encoded: String = p
+                .split('/')
+                .map(|seg| urlencoding::encode(seg).into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
             format!("{GRAPH_BASE}{base}/drive/root:/{encoded}:/children")
         }
         _ => format!("{GRAPH_BASE}{base}/drive/root/children"),
@@ -328,6 +334,16 @@ pub async fn onedrive_download(
         let code = extract_graph_error_code(&body).unwrap_or_else(|| "unknown".to_string());
         tracing::debug!("ms365: onedrive_download raw error body: {body}");
         anyhow::bail!("ms365: onedrive_download failed ({status}, code={code})");
+    }
+
+    // Check Content-Length header first to reject oversized files before
+    // buffering the entire response body into memory.
+    if let Some(content_length) = resp.content_length() {
+        if usize::try_from(content_length).unwrap_or(usize::MAX) > max_size {
+            anyhow::bail!(
+                "ms365: file Content-Length exceeds max_size ({content_length} > {max_size})"
+            );
+        }
     }
 
     let bytes = resp
@@ -479,11 +495,16 @@ mod tests {
     #[test]
     fn onedrive_path_url() {
         let base = user_path("me");
-        let encoded = urlencoding::encode("Documents/Reports");
+        let path = "Documents/Reports";
+        let encoded: String = path
+            .split('/')
+            .map(|seg| urlencoding::encode(seg).into_owned())
+            .collect::<Vec<_>>()
+            .join("/");
         let url = format!("{GRAPH_BASE}{base}/drive/root:/{encoded}:/children");
         assert_eq!(
             url,
-            "https://graph.microsoft.com/v1.0/me/drive/root:/Documents%2FReports:/children"
+            "https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Reports:/children"
         );
     }
 
