@@ -135,7 +135,7 @@ pub fn live_channels_registry() -> &'static Mutex<HashMap<String, Arc<dyn Channe
     LIVE_CHANNELS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn register_live_channels(channels: &HashMap<String, Arc<dyn Channel>>) {
+pub fn register_live_channels<S: ::std::hash::BuildHasher>(channels: &HashMap<String, Arc<dyn Channel>, S>) {
     let mut registry = live_channels_registry().lock().unwrap();
     for (name, ch) in channels {
         registry.insert(name.clone(), Arc::clone(ch));
