@@ -1147,6 +1147,7 @@ impl DelegateTool {
                 0,    // context_token_budget: 0 = disabled for subagents
                 None, // shared_budget: TODO thread from parent in future
                 None, // receipt_generator: TODO thread from parent in future
+                None, // collected_receipts
             ),
         )
         .await;

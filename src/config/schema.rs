@@ -1237,6 +1237,10 @@ pub struct ToolReceiptsConfig {
     /// Enable HMAC receipt generation for tool executions. Default: `false`.
     #[serde(default)]
     pub enabled: bool,
+    /// When true, append tool receipts to the user-visible response message.
+    /// When false (default), receipts are only in internal history and debug logs.
+    #[serde(default)]
+    pub show_in_response: bool,
 }
 
 /// OpenAI Whisper STT provider configuration (`[transcription.openai]`).
