@@ -7,8 +7,8 @@
 //! Based on: Basu, A. (2026). "Tool Receipts, Not Zero-Knowledge Proofs:
 //! Practical Hallucination Detection for AI Agents." arXiv:2603.10060
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -132,16 +132,16 @@ mod tests {
 
     #[test]
     fn receipt_generation_deterministic() {
-        let gen = ReceiptGenerator::with_key(test_key());
-        let r1 = gen.generate("shell", &test_args(), "Mon Mar 27", 1_711_547_700);
-        let r2 = gen.generate("shell", &test_args(), "Mon Mar 27", 1_711_547_700);
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
+        let r1 = receipt_gen.generate("shell", &test_args(), "Mon Mar 27", 1_711_547_700);
+        let r2 = receipt_gen.generate("shell", &test_args(), "Mon Mar 27", 1_711_547_700);
         assert_eq!(r1, r2);
     }
 
     #[test]
     fn receipt_format_parseable() {
-        let gen = ReceiptGenerator::with_key(test_key());
-        let receipt = gen.generate("shell", &test_args(), "output", 1_711_547_700);
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
+        let receipt = receipt_gen.generate("shell", &test_args(), "output", 1_711_547_700);
         assert!(receipt.starts_with("zc-receipt-1711547700-"));
         let (ts, hash) = parse_receipt(&receipt).unwrap();
         assert_eq!(ts, 1_711_547_700);
@@ -150,89 +150,89 @@ mod tests {
 
     #[test]
     fn receipt_verification_succeeds() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
-        let receipt = gen.generate("shell", &args, "output", 1_711_547_700);
-        assert!(gen.verify(&receipt, "shell", &args, "output"));
+        let receipt = receipt_gen.generate("shell", &args, "output", 1_711_547_700);
+        assert!(receipt_gen.verify(&receipt, "shell", &args, "output"));
     }
 
     #[test]
     fn receipt_verification_fails_tampered_result() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
-        let receipt = gen.generate("shell", &args, "real output", 1_711_547_700);
-        assert!(!gen.verify(&receipt, "shell", &args, "fake output"));
+        let receipt = receipt_gen.generate("shell", &args, "real output", 1_711_547_700);
+        assert!(!receipt_gen.verify(&receipt, "shell", &args, "fake output"));
     }
 
     #[test]
     fn receipt_verification_fails_tampered_name() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
-        let receipt = gen.generate("shell", &args, "output", 1_711_547_700);
-        assert!(!gen.verify(&receipt, "web_search", &args, "output"));
+        let receipt = receipt_gen.generate("shell", &args, "output", 1_711_547_700);
+        assert!(!receipt_gen.verify(&receipt, "web_search", &args, "output"));
     }
 
     #[test]
     fn receipt_verification_fails_wrong_key() {
-        let gen1 = ReceiptGenerator::with_key(vec![1u8; 32]);
-        let gen2 = ReceiptGenerator::with_key(vec![2u8; 32]);
+        let receipt_gen1 = ReceiptGenerator::with_key(vec![1u8; 32]);
+        let receipt_gen2 = ReceiptGenerator::with_key(vec![2u8; 32]);
         let args = test_args();
-        let receipt = gen1.generate("shell", &args, "output", 1_711_547_700);
-        assert!(!gen2.verify(&receipt, "shell", &args, "output"));
+        let receipt = receipt_gen1.generate("shell", &args, "output", 1_711_547_700);
+        assert!(!receipt_gen2.verify(&receipt, "shell", &args, "output"));
     }
 
     #[test]
     fn fabricated_receipt_fails_verification() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
         let fake = "zc-receipt-1_711_547_700-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        assert!(!gen.verify(fake, "shell", &args, "output"));
+        assert!(!receipt_gen.verify(fake, "shell", &args, "output"));
     }
 
     #[test]
     fn malformed_receipt_fails_verification() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
-        assert!(!gen.verify("not-a-receipt", "shell", &args, "output"));
-        assert!(!gen.verify("zc-receipt-", "shell", &args, "output"));
-        assert!(!gen.verify("zc-receipt-abc-hash", "shell", &args, "output"));
-        assert!(!gen.verify("zc-receipt-123-", "shell", &args, "output"));
+        assert!(!receipt_gen.verify("not-a-receipt", "shell", &args, "output"));
+        assert!(!receipt_gen.verify("zc-receipt-", "shell", &args, "output"));
+        assert!(!receipt_gen.verify("zc-receipt-abc-hash", "shell", &args, "output"));
+        assert!(!receipt_gen.verify("zc-receipt-123-", "shell", &args, "output"));
     }
 
     #[test]
     fn receipt_from_different_tool_fails() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args_a = serde_json::json!({"query": "rust"});
         let args_b = serde_json::json!({"path": "/tmp"});
-        let receipt = gen.generate("web_search", &args_a, "results", 1_711_547_700);
-        assert!(!gen.verify(&receipt, "file_read", &args_b, "results"));
+        let receipt = receipt_gen.generate("web_search", &args_a, "results", 1_711_547_700);
+        assert!(!receipt_gen.verify(&receipt, "file_read", &args_b, "results"));
     }
 
     #[test]
     fn receipt_with_modified_args_fails() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args_real = serde_json::json!({"command": "date"});
         let args_fake = serde_json::json!({"command": "rm -rf /"});
-        let receipt = gen.generate("shell", &args_real, "Mon Mar 27", 1_711_547_700);
-        assert!(!gen.verify(&receipt, "shell", &args_fake, "Mon Mar 27"));
+        let receipt = receipt_gen.generate("shell", &args_real, "Mon Mar 27", 1_711_547_700);
+        assert!(!receipt_gen.verify(&receipt, "shell", &args_fake, "Mon Mar 27"));
     }
 
     #[test]
     fn generate_now_produces_valid_receipt() {
-        let gen = ReceiptGenerator::with_key(test_key());
+        let receipt_gen = ReceiptGenerator::with_key(test_key());
         let args = test_args();
-        let receipt = gen.generate_now("shell", &args, "output");
+        let receipt = receipt_gen.generate_now("shell", &args, "output");
         assert!(receipt.starts_with("zc-receipt-"));
-        assert!(gen.verify(&receipt, "shell", &args, "output"));
+        assert!(receipt_gen.verify(&receipt, "shell", &args, "output"));
     }
 
     #[test]
     fn new_generates_random_key() {
-        let gen1 = ReceiptGenerator::new();
-        let gen2 = ReceiptGenerator::new();
+        let receipt_gen1 = ReceiptGenerator::new();
+        let receipt_gen2 = ReceiptGenerator::new();
         let args = test_args();
-        let r1 = gen1.generate("shell", &args, "out", 100);
-        let r2 = gen2.generate("shell", &args, "out", 100);
+        let r1 = receipt_gen1.generate("shell", &args, "out", 100);
+        let r2 = receipt_gen2.generate("shell", &args, "out", 100);
         // Different keys → different receipts (probabilistically)
         assert_ne!(r1, r2);
     }
