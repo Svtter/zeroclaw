@@ -9373,33 +9373,32 @@ impl Config {
     /// Remaining keys are probed: the key is deserialized in isolation and
     /// the result compared to the default — a changed output means serde
     /// consumed it (covers `Option<T>` fields and `#[serde(alias)]` names).
+    /// Return top-level TOML keys that are not recognised by `Config`.
+    ///
+    /// Uses the JSON schema derived via `schemars` so that *all* struct
+    /// fields are enumerated — including `Option<T>` fields that default
+    /// to `None` (e.g. `api_key`, `api_url`).  The previous approach
+    /// serialised `Config::default()` to TOML and missed those fields,
+    /// producing false-positive "Unknown config key" warnings.
     pub fn unknown_keys(raw_toml: &str) -> Vec<String> {
         let raw: toml::Table = match raw_toml.parse() {
             Ok(t) => t,
             Err(_) => return Vec::new(),
         };
-        static DEFAULTS: OnceLock<toml::Table> = OnceLock::new();
-        let defaults = DEFAULTS.get_or_init(|| {
-            toml::to_string(&Config::default())
+        static KNOWN_KEYS: OnceLock<Vec<String>> = OnceLock::new();
+        let known = KNOWN_KEYS.get_or_init(|| {
+            let schema = schemars::schema_for!(Config);
+            serde_json::to_value(&schema)
                 .ok()
-                .and_then(|s| s.parse().ok())
+                .and_then(|v| {
+                    v.get("properties")?
+                        .as_object()
+                        .map(|props| props.keys().cloned().collect())
+                })
                 .unwrap_or_default()
         });
         raw.keys()
-            .filter(|key| {
-                if defaults.contains_key(key.as_str()) {
-                    return false;
-                }
-                let mut t = toml::Table::new();
-                t.insert((*key).clone(), raw[key.as_str()].clone());
-                let consumed = toml::to_string(&t)
-                    .ok()
-                    .and_then(|s| toml::from_str::<Config>(&s).ok())
-                    .and_then(|c| toml::to_string(&c).ok())
-                    .and_then(|s| s.parse::<toml::Table>().ok())
-                    .is_some_and(|t| t != *defaults);
-                !consumed
-            })
+            .filter(|key| !known.contains(&key.to_string()))
             .cloned()
             .collect()
     }
