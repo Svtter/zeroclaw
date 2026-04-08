@@ -653,7 +653,7 @@ curl -LsSf https://raw.githubusercontent.com/zeroclaw-labs/zeroclaw/master/insta
 
 ## Icy Crab 🦀
 
-تم بناء ZeroClaw للسلطعون الناعم 🦀، مساعد ذكاء اصطناعي سريع وفعال. بناه Argenis De La Rosa والمجتمع.
+تم بناء ZeroClaw Icy Crab 🦀، مساعد ذكاء اصطناعي سريع وفعال. بناه Argenis De La Rosa والمجتمع.
 
 - [zeroclawlabs.ai](https://zeroclawlabs.ai)
 - [@zeroclawlabs](https://x.com/zeroclawlabs)

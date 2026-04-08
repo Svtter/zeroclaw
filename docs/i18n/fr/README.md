@@ -653,7 +653,7 @@ Utilisez ces ressources lorsque vous avez dépassé le flux d'onboarding et voul
 
 ## Icy Crab 🦀
 
-ZeroClaw a été construit pour the icy crab 🦀, un assistant IA rapide et efficace. Construit par Argenis De La Rosa et la communauté.
+ZeroClaw a été construit pour Icy Crab 🦀, un assistant IA rapide et efficace. Construit par Argenis De La Rosa et la communauté.
 
 - [zeroclawlabs.ai](https://zeroclawlabs.ai)
 - [@zeroclawlabs](https://x.com/zeroclawlabs)
