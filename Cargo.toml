@@ -240,7 +240,20 @@ landlock = { version = "0.4", optional = true }
 libc = "0.2"
 
 [features]
-default = ["observability-prometheus", "skill-creation", "channel-lark"]
+default = [
+    "observability-prometheus",
+    "observability-otel",
+    "skill-creation",
+    "channel-lark",
+    "channel-nostr",
+    "channel-matrix",
+    "browser-native",
+    "rag-pdf",
+    "whatsapp-web",
+    "plugins-wasm",
+    "sandbox-bubblewrap",
+    "webauthn",
+]
 channel-nostr = ["dep:nostr-sdk"]
 hardware = ["nusb", "tokio-serial"]
 channel-matrix = ["dep:matrix-sdk"]
@@ -330,6 +343,7 @@ criterion = { version = "0.8", features = ["async_tokio"] }
 wiremock = "0.6"
 scopeguard = "1.2"
 rcgen = "0.13"
+tokio-test = "0.4"
 
 [[test]]
 name = "component"
