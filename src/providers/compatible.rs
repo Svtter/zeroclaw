@@ -2755,7 +2755,11 @@ mod tests {
     async fn chat_via_responses_requires_non_system_message() {
         let provider = make_provider("custom", "https://api.example.com", Some("test-key"));
         let err = provider
-            .chat_via_responses(Some("test-key"), &[ChatMessage::system("policy")], "gpt-test")
+            .chat_via_responses(
+                Some("test-key"),
+                &[ChatMessage::system("policy")],
+                "gpt-test",
+            )
             .await
             .expect_err("system-only fallback payload should fail");
 
