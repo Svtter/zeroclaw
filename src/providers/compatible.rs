@@ -2462,9 +2462,7 @@ mod tests {
     #[tokio::test]
     async fn chat_without_key_attempts_request() {
         let p = make_provider("Local", "http://127.0.0.1:1", None);
-        let result = p
-            .chat_with_system(None, "hello", "default", 0.7)
-            .await;
+        let result = p.chat_with_system(None, "hello", "default", 0.7).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -2757,7 +2755,7 @@ mod tests {
     async fn chat_via_responses_requires_non_system_message() {
         let provider = make_provider("custom", "https://api.example.com", Some("test-key"));
         let err = provider
-            .chat_via_responses("test-key", &[ChatMessage::system("policy")], "gpt-test")
+            .chat_via_responses(Some("test-key"), &[ChatMessage::system("policy")], "gpt-test")
             .await
             .expect_err("system-only fallback payload should fail");
 

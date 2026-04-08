@@ -2,8 +2,10 @@
 use crate::channels::MatrixChannel;
 #[cfg(feature = "whatsapp-web")]
 use crate::channels::WhatsAppWebChannel;
+#[cfg(feature = "channel-lark")]
+use crate::channels::LarkChannel;
 use crate::channels::{
-    Channel, DiscordChannel, LarkChannel, MattermostChannel, QQChannel, SendMessage, SignalChannel,
+    Channel, DiscordChannel, MattermostChannel, QQChannel, SendMessage, SignalChannel,
     SlackChannel, TelegramChannel,
 };
 use crate::config::Config;
@@ -671,26 +673,40 @@ pub(crate) async fn deliver_announcement(
                 .await?;
         }
         "lark" => {
-            let lk = config
-                .channels_config
-                .lark
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("lark channel not configured"))?;
-            let channel = LarkChannel::from_lark_config(lk);
-            channel
-                .send(&SendMessage::new(safe_output.as_str(), target))
-                .await?;
+            #[cfg(feature = "channel-lark")]
+            {
+                let lk = config
+                    .channels_config
+                    .lark
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("lark channel not configured"))?;
+                let channel = LarkChannel::from_lark_config(lk);
+                channel
+                    .send(&SendMessage::new(safe_output.as_str(), target))
+                    .await?;
+            }
+            #[cfg(not(feature = "channel-lark"))]
+            {
+                anyhow::bail!("lark delivery channel requires `channel-lark` feature");
+            }
         }
         "feishu" => {
-            let fs = config
-                .channels_config
-                .feishu
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("feishu channel not configured"))?;
-            let channel = LarkChannel::from_feishu_config(fs);
-            channel
-                .send(&SendMessage::new(safe_output.as_str(), target))
-                .await?;
+            #[cfg(feature = "channel-lark")]
+            {
+                let fs = config
+                    .channels_config
+                    .feishu
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("feishu channel not configured"))?;
+                let channel = LarkChannel::from_feishu_config(fs);
+                channel
+                    .send(&SendMessage::new(safe_output.as_str(), target))
+                    .await?;
+            }
+            #[cfg(not(feature = "channel-lark"))]
+            {
+                anyhow::bail!("feishu delivery channel requires `channel-lark` feature");
+            }
         }
         other => anyhow::bail!("unsupported delivery channel: {other}"),
     }
@@ -1500,6 +1516,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "channel-lark")]
     #[tokio::test]
     async fn deliver_if_configured_lark_missing_config() {
         let tmp = TempDir::new().unwrap();
@@ -1518,6 +1535,29 @@ mod tests {
         assert!(err.to_string().contains("lark channel not configured"));
     }
 
+    #[cfg(not(feature = "channel-lark"))]
+    #[tokio::test]
+    async fn deliver_if_configured_lark_feature_disabled() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp).await;
+        let mut job = test_job("echo ok");
+        job.delivery = DeliveryConfig {
+            mode: "announce".into(),
+            channel: Some("lark".into()),
+            to: Some("oc_abc123".into()),
+            best_effort: false,
+        };
+
+        let err = deliver_if_configured(&config, &job, "hello")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("lark delivery channel requires `channel-lark` feature")
+        );
+    }
+
+    #[cfg(feature = "channel-lark")]
     #[tokio::test]
     async fn deliver_if_configured_feishu_missing_config() {
         let tmp = TempDir::new().unwrap();
@@ -1534,6 +1574,28 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("feishu channel not configured"));
+    }
+
+    #[cfg(not(feature = "channel-lark"))]
+    #[tokio::test]
+    async fn deliver_if_configured_feishu_feature_disabled() {
+        let tmp = TempDir::new().unwrap();
+        let config = test_config(&tmp).await;
+        let mut job = test_job("echo ok");
+        job.delivery = DeliveryConfig {
+            mode: "announce".into(),
+            channel: Some("feishu".into()),
+            to: Some("oc_abc123".into()),
+            best_effort: false,
+        };
+
+        let err = deliver_if_configured(&config, &job, "hello")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("feishu delivery channel requires `channel-lark` feature")
+        );
     }
 
     #[test]
