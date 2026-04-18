@@ -2061,6 +2061,15 @@ fn get_default_pricing() -> std::collections::HashMap<String, ModelPricing> {
         },
     );
 
+    // MiniMax models
+    prices.insert(
+        "minimax/MiniMax-M2.7".into(),
+        ModelPricing {
+            input: 0.30,
+            output: 1.20,
+        },
+    );
+
     // Google models
     prices.insert(
         "google/gemini-2.0-flash".into(),
