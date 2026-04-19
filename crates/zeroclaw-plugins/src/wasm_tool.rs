@@ -1,7 +1,7 @@
 //! Bridge between WASM plugins and the Tool trait.
 
-use crate::runtime;
 use crate::PluginPermission;
+use crate::runtime;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -42,34 +42,12 @@ impl WasmTool {
         fallback_description: String,
     ) -> Self {
         // Try to load metadata from the WASM module itself.
-        let (name, description, schema) =
-            match runtime::create_plugin(&wasm_path, &permissions) {
-                Ok(mut plugin) => match runtime::call_tool_metadata(&mut plugin) {
-                    Ok(meta) => (meta.name, meta.description, meta.parameters_schema),
-                    Err(e) => {
-                        tracing::debug!(
-                            "plugin at {} has no tool_metadata export ({e}), using fallback",
-                            wasm_path.display()
-                        );
-                        (
-                            fallback_name.clone(),
-                            fallback_description.clone(),
-                            serde_json::json!({
-                                "type": "object",
-                                "properties": {
-                                    "input": {
-                                        "type": "string",
-                                        "description": "Input for the plugin"
-                                    }
-                                },
-                                "required": ["input"]
-                            }),
-                        )
-                    }
-                },
+        let (name, description, schema) = match runtime::create_plugin(&wasm_path, &permissions) {
+            Ok(mut plugin) => match runtime::call_tool_metadata(&mut plugin) {
+                Ok(meta) => (meta.name, meta.description, meta.parameters_schema),
                 Err(e) => {
-                    tracing::warn!(
-                        "failed to load WASM plugin at {} for metadata: {e}",
+                    tracing::debug!(
+                        "plugin at {} has no tool_metadata export ({e}), using fallback",
                         wasm_path.display()
                     );
                     (
@@ -87,7 +65,28 @@ impl WasmTool {
                         }),
                     )
                 }
-            };
+            },
+            Err(e) => {
+                tracing::warn!(
+                    "failed to load WASM plugin at {} for metadata: {e}",
+                    wasm_path.display()
+                );
+                (
+                    fallback_name.clone(),
+                    fallback_description.clone(),
+                    serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "input": {
+                                "type": "string",
+                                "description": "Input for the plugin"
+                            }
+                        },
+                        "required": ["input"]
+                    }),
+                )
+            }
+        };
 
         Self {
             name,

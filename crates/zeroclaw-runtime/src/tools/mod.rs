@@ -927,14 +927,12 @@ pub fn all_tools_with_runtime(
                     let details = host.tool_plugin_details();
                     let count = details.len();
                     for (manifest, wasm_path) in details {
-                        tool_arcs.push(Arc::new(
-                            zeroclaw_plugins::wasm_tool::WasmTool::from_wasm(
-                                wasm_path.to_path_buf(),
-                                manifest.permissions.clone(),
-                                manifest.name.clone(),
-                                manifest.description.clone().unwrap_or_default(),
-                            ),
-                        ));
+                        tool_arcs.push(Arc::new(zeroclaw_plugins::wasm_tool::WasmTool::from_wasm(
+                            wasm_path.to_path_buf(),
+                            manifest.permissions.clone(),
+                            manifest.name.clone(),
+                            manifest.description.clone().unwrap_or_default(),
+                        )));
                     }
                     tracing::info!("Loaded {count} WASM plugin tools");
                 }

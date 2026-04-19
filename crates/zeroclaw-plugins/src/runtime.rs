@@ -163,10 +163,7 @@ fn handle_env_read(
 // ── Plugin creation and invocation ────────────────────────────────
 
 /// Create an Extism plugin from a WASM file with the given permissions.
-pub fn create_plugin(
-    wasm_path: &Path,
-    permissions: &[PluginPermission],
-) -> Result<extism::Plugin> {
+pub fn create_plugin(wasm_path: &Path, permissions: &[PluginPermission]) -> Result<extism::Plugin> {
     let perm_set: HashSet<PluginPermission> = permissions.iter().cloned().collect();
     let ctx = UserData::new(HostContext {
         permissions: perm_set,
@@ -180,13 +177,7 @@ pub fn create_plugin(
         handle_http_request,
     );
 
-    let env_fn = Function::new(
-        "zc_env_read",
-        [PTR],
-        [PTR],
-        ctx,
-        handle_env_read,
-    );
+    let env_fn = Function::new("zc_env_read", [PTR], [PTR], ctx, handle_env_read);
 
     let manifest = Manifest::new([Wasm::file(wasm_path)]);
 
@@ -205,8 +196,7 @@ pub fn call_tool_metadata(plugin: &mut extism::Plugin) -> Result<ToolMetadata> {
 
 /// Call the `execute` export with the given args JSON and return a `ToolResult`.
 pub fn call_execute(plugin: &mut extism::Plugin, args_json: &[u8]) -> Result<ToolResult> {
-    let input =
-        std::str::from_utf8(args_json).context("plugin args are not valid UTF-8")?;
+    let input = std::str::from_utf8(args_json).context("plugin args are not valid UTF-8")?;
 
     let output = plugin
         .call::<&str, String>("execute", input)
