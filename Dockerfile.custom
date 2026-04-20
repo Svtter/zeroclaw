@@ -1,5 +1,5 @@
 FROM ghcr.io/zeroclaw-labs/zeroclaw:debian
 
 USER root
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"     > /etc/apt/sources.list.d/github-cli.list     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash -     && apt-get update -qq     && apt-get install -y -qq gh python3 python3-pip nodejs     && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"     > /etc/apt/sources.list.d/github-cli.list     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash -     && apt-get update -qq     && apt-get install -y -qq gh python3 python3-pip nodejs openssh-client     && rm -rf /var/lib/apt/lists/*
 USER nobody
