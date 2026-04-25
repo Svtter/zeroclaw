@@ -1355,6 +1355,13 @@ fn should_skip_memory_context_entry(key: &str, content: &str) -> bool {
         return true;
     }
 
+    // Skip raw per-turn user messages: re-injecting them causes each
+    // recalled entry to embed all prior generations, growing exponentially.
+    // Consolidated knowledge is already promoted to Core/Daily entries.
+    if zeroclaw_memory::is_user_autosave_key(key) {
+        return true;
+    }
+
     if zeroclaw_memory::should_skip_autosave_content(content) {
         return true;
     }
@@ -3056,6 +3063,8 @@ async fn process_channel_message(
                         ctx.context_token_budget,
                         None, // shared_budget
                         target_channel.as_deref(),
+                        None, // receipt_generator
+                        None, // collected_receipts
                     ),
                     ),
                     ),
@@ -3942,7 +3951,8 @@ fn build_channel_by_id(config: &Config, channel_id: &str) -> Result<Arc<dyn Chan
                     dc.multi_message_delay_ms,
                 )
                 .with_transcription(config.transcription.clone())
-                .with_stall_timeout(dc.stall_timeout_secs),
+                .with_stall_timeout(dc.stall_timeout_secs)
+                .with_approval_timeout_secs(dc.approval_timeout_secs),
             ))
         }
         "slack" => {
@@ -3962,7 +3972,8 @@ fn build_channel_by_id(config: &Config, channel_id: &str) -> Result<Arc<dyn Chan
                 .with_markdown_blocks(sl.use_markdown_blocks)
                 .with_transcription(config.transcription.clone())
                 .with_streaming(sl.stream_drafts, sl.draft_update_interval_ms)
-                .with_cancel_reaction(sl.cancel_reaction.clone()),
+                .with_cancel_reaction(sl.cancel_reaction.clone())
+                .with_approval_timeout_secs(sl.approval_timeout_secs),
             ))
         }
         "mattermost" => {
@@ -3986,14 +3997,17 @@ fn build_channel_by_id(config: &Config, channel_id: &str) -> Result<Arc<dyn Chan
                 .signal
                 .as_ref()
                 .context("Signal channel is not configured")?;
-            Ok(Arc::new(SignalChannel::new(
-                sg.http_url.clone(),
-                sg.account.clone(),
-                sg.group_id.clone(),
-                sg.allowed_from.clone(),
-                sg.ignore_attachments,
-                sg.ignore_stories,
-            )))
+            Ok(Arc::new(
+                SignalChannel::new(
+                    sg.http_url.clone(),
+                    sg.account.clone(),
+                    sg.group_id.clone(),
+                    sg.allowed_from.clone(),
+                    sg.ignore_attachments,
+                    sg.ignore_stories,
+                )
+                .with_approval_timeout_secs(sg.approval_timeout_secs),
+            ))
         }
         "matrix" => {
             #[cfg(feature = "channel-matrix")]
@@ -4003,14 +4017,17 @@ fn build_channel_by_id(config: &Config, channel_id: &str) -> Result<Arc<dyn Chan
                     .matrix
                     .as_ref()
                     .context("Matrix channel is not configured")?;
-                Ok(Arc::new(MatrixChannel::new(
-                    mx.homeserver.clone(),
-                    mx.access_token.clone(),
-                    // "" sentinel = no specific room (join logic handles "allow all")
-                    mx.allowed_rooms.first().cloned().unwrap_or_default(),
-                    mx.allowed_users.clone(),
-                    mx.mention_only,
-                )))
+                Ok(Arc::new(
+                    MatrixChannel::new(
+                        mx.homeserver.clone(),
+                        mx.access_token.clone(),
+                        // "" sentinel = no specific room (join logic handles "allow all")
+                        mx.allowed_rooms.first().cloned().unwrap_or_default(),
+                        mx.allowed_users.clone(),
+                        mx.mention_only,
+                    )
+                    .with_approval_timeout_secs(mx.approval_timeout_secs),
+                ))
             }
             #[cfg(not(feature = "channel-matrix"))]
             {
@@ -4327,8 +4344,10 @@ struct ConfiguredChannel {
 fn collect_configured_channels(
     config: &Config,
     matrix_skip_context: &str,
+    tool_specs: &[(String, String)],
 ) -> Vec<ConfiguredChannel> {
     let _ = matrix_skip_context;
+    let _ = tool_specs;
     let mut channels = Vec::new();
 
     #[cfg(feature = "channel-telegram")]
@@ -4349,6 +4368,7 @@ fn collect_configured_channels(
                     .with_tts(config.tts.clone())
                     .with_workspace_dir(config.workspace_dir.clone())
                     .with_proxy_url(tg.proxy_url.clone())
+                    .with_tool_command_specs(tool_specs.to_vec())
                     .with_approval_timeout_secs(tg.approval_timeout_secs),
                 ),
             });
@@ -4376,7 +4396,8 @@ fn collect_configured_channels(
                     )
                     .with_proxy_url(dc.proxy_url.clone())
                     .with_transcription(config.transcription.clone())
-                    .with_stall_timeout(dc.stall_timeout_secs),
+                    .with_stall_timeout(dc.stall_timeout_secs)
+                    .with_approval_timeout_secs(dc.approval_timeout_secs),
                 ),
             });
         } else {
@@ -4431,7 +4452,8 @@ fn collect_configured_channels(
                     .with_proxy_url(sl.proxy_url.clone())
                     .with_transcription(config.transcription.clone())
                     .with_streaming(sl.stream_drafts, sl.draft_update_interval_ms)
-                    .with_cancel_reaction(sl.cancel_reaction.clone()),
+                    .with_cancel_reaction(sl.cancel_reaction.clone())
+                    .with_approval_timeout_secs(sl.approval_timeout_secs),
                 ),
             });
         } else {
@@ -4496,7 +4518,8 @@ fn collect_configured_channels(
                         mx.draft_update_interval_ms,
                         mx.multi_message_delay_ms,
                     )
-                    .with_transcription(config.transcription.clone()),
+                    .with_transcription(config.transcription.clone())
+                    .with_approval_timeout_secs(mx.approval_timeout_secs),
                 ),
             });
         } else {
@@ -4525,7 +4548,8 @@ fn collect_configured_channels(
                         sig.ignore_attachments,
                         sig.ignore_stories,
                     )
-                    .with_proxy_url(sig.proxy_url.clone()),
+                    .with_proxy_url(sig.proxy_url.clone())
+                    .with_approval_timeout_secs(sig.approval_timeout_secs),
                 ),
             });
         } else {
@@ -4556,7 +4580,8 @@ fn collect_configured_channels(
                                 )
                                 .with_proxy_url(wa.proxy_url.clone())
                                 .with_dm_mention_patterns(wa.dm_mention_patterns.clone())
-                                .with_group_mention_patterns(wa.group_mention_patterns.clone()),
+                                .with_group_mention_patterns(wa.group_mention_patterns.clone())
+                                .with_approval_timeout_secs(wa.approval_timeout_secs),
                             ),
                         });
                     } else {
@@ -4969,7 +4994,7 @@ fn collect_configured_channels(
 /// Run health checks for configured channels.
 pub async fn doctor_channels(config: Config) -> Result<()> {
     #[allow(unused_mut)]
-    let mut channels = collect_configured_channels(&config, "health check");
+    let mut channels = collect_configured_channels(&config, "health check", &[]);
 
     #[cfg(feature = "channel-nostr")]
     if let Some(ref ns) = config.channels.nostr {
@@ -5198,9 +5223,20 @@ pub async fn start_channels(config: Config) -> Result<()> {
         }
     }
 
-    let tools_registry = Arc::new(built_tools);
-
     let skills = zeroclaw_runtime::skills::load_skills_with_config(&workspace, &config);
+
+    // Register skill-defined tools so the gateway can execute them (not just
+    // describe them in the prompt). Without this, skill tools like email.send
+    // appear in the system prompt but return "Unknown tool" when called.
+    zeroclaw_runtime::tools::register_skill_tools(&mut built_tools, &skills, security.clone());
+
+    // Extract (name, description) specs from built tools for channel command registration.
+    let tool_specs: Vec<(String, String)> = built_tools
+        .iter()
+        .map(|t| (t.name().to_string(), t.description().to_string()))
+        .collect();
+
+    let tools_registry = Arc::new(built_tools);
 
     // ── Load locale-aware tool descriptions ────────────────────────
     let i18n_locale = config
@@ -5333,7 +5369,7 @@ pub async fn start_channels(config: Config) -> Result<()> {
     // Collect active channels from a shared builder to keep startup and doctor parity.
     #[allow(unused_mut)]
     let mut channels: Vec<Arc<dyn Channel>> =
-        collect_configured_channels(&config, "runtime startup")
+        collect_configured_channels(&config, "runtime startup", &tool_specs)
             .into_iter()
             .map(|configured| configured.channel)
             .collect();
@@ -5610,6 +5646,14 @@ pub async fn start_channels(config: Config) -> Result<()> {
                 msgs.push(closure);
                 orphans_closed += 1;
             }
+            // Self-heal: strip orphaned tool_result messages left by a prior
+            // compaction that dropped the assistant tool_use without its paired
+            // tool_result. Must run LAST, after every other mutation, so any
+            // future trim step inserted above is covered by the same guard.
+            // Without this, the session is bricked until the file is deleted
+            // because every API call fails with 400 "unexpected tool_use_id
+            // in tool_result blocks". See #5813.
+            zeroclaw_runtime::agent::history_pruner::remove_orphaned_tool_messages(&mut msgs);
             hydrated += 1;
             histories.push(key, msgs);
         }
@@ -5877,6 +5921,22 @@ mod tests {
         assert!(!should_skip_memory_context_entry(
             "telegram_user_msg_201",
             "plain text without tool results"
+        ));
+
+        // Per-turn user auto-save keys must be skipped to prevent exponential
+        // context bloat from re-injected conversation history.
+        assert!(should_skip_memory_context_entry(
+            "user_msg",
+            "original user message text"
+        ));
+        assert!(should_skip_memory_context_entry(
+            "user_msg_a1b2c3d4e5f6",
+            "follow-up message embedding prior context"
+        ));
+        // Channel-scoped keys (e.g. telegram_*) must NOT be affected.
+        assert!(!should_skip_memory_context_entry(
+            "telegram_user_msg_101",
+            "Please describe the image"
         ));
     }
 
@@ -10378,7 +10438,7 @@ This is an example JSON object for profile settings."#;
             proxy_url: None,
         });
 
-        let channels = collect_configured_channels(&config, "test");
+        let channels = collect_configured_channels(&config, "test", &[]);
 
         assert!(
             channels
@@ -10401,7 +10461,7 @@ This is an example JSON object for profile settings."#;
             ..Default::default()
         });
 
-        let channels = collect_configured_channels(&config, "test");
+        let channels = collect_configured_channels(&config, "test", &[]);
         assert!(
             !channels.iter().any(|entry| entry.display_name == "Email"),
             "disabled email should not be collected"
@@ -10417,7 +10477,7 @@ This is an example JSON object for profile settings."#;
             ..Default::default()
         });
 
-        let channels = collect_configured_channels(&config, "test");
+        let channels = collect_configured_channels(&config, "test", &[]);
         assert!(
             !channels
                 .iter()
