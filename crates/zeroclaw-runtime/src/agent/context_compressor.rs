@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::time::Duration;
 
 use anyhow::Result;
+use serde_json;
 use std::sync::Arc;
 
 use zeroclaw_api::provider::{ChatMessage, Provider};
@@ -375,10 +376,35 @@ impl ContextCompressor {
             }
         }
 
+        // Extract the last reasoning_content from compressed assistant messages
+        // so thinking-mode providers (e.g. DeepSeek V4) don't reject subsequent requests.
+        let last_reasoning = history[start..end]
+            .iter()
+            .rev()
+            .filter(|m| m.role == "assistant")
+            .find_map(|m| {
+                serde_json::from_str::<serde_json::Value>(&m.content)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("reasoning_content")
+                            .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    })
+            });
+
         // Splice: head + [SUMMARY] + tail
-        let summary_msg = ChatMessage::assistant(format!(
-            "[CONTEXT SUMMARY \u{2014} {message_count} earlier messages compressed]\n\n{summary}"
-        ));
+        let summary_msg = if let Some(rc) = last_reasoning {
+            ChatMessage::assistant(
+                serde_json::json!({
+                    "content": format!("[CONTEXT SUMMARY \u{2014} {message_count} earlier messages compressed]\n\n{summary}"),
+                    "reasoning_content": rc,
+                })
+                .to_string(),
+            )
+        } else {
+            ChatMessage::assistant(format!(
+                "[CONTEXT SUMMARY \u{2014} {message_count} earlier messages compressed]\n\n{summary}"
+            ))
+        };
         history.splice(start..end, std::iter::once(summary_msg));
 
         // Repair orphaned tool pairs
